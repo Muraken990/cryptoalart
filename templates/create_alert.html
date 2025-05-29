@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>アラート作成 - CryptoAlert</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            width: 100%;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            color: #6366f1;
+            text-decoration: none;
+            margin-bottom: 20px;
+            font-size: 14px;
+            transition: color 0.2s;
+        }
+
+        .back-link:hover {
+            color: #4f46e5;
+        }
+
+        .back-link::before {
+            content: '←';
+            margin-right: 8px;
+        }
+
+        h1 {
+            color: #1f2937;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        label {
+            display: block;
+            color: #374151;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 16px;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        input:focus,
+        select:focus {
+            outline: none;
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        .alert-type-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .alert-type-option {
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+
+        .alert-type-option:hover {
+            border-color: #6366f1;
+            background-color: #f8fafc;
+        }
+
+        .alert-type-option.selected {
+            border-color: #6366f1;
+            background-color: #eff6ff;
+        }
+
+        .alert-type-option input[type="radio"] {
+            display: none;
+        }
+
+        .alert-type-icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .alert-type-title {
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 4px;
+        }
+
+        .alert-type-desc {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .threshold-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .threshold-input {
+            flex: 1;
+        }
+
+        .threshold-unit {
+            color: #6b7280;
+            font-weight: 600;
+        }
+
+        .help-text {
+            font-size: 14px;
+            color: #6b7280;
+            margin-top: 6px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px 24px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        .alert.success {
+            background-color: #d1fae5;
+            color: #065f46;
+            border: 1px solid #10b981;
+        }
+
+        .alert.error {
+            background-color: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #ef4444;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            color: #6b7280;
+            margin-top: 16px;
+        }
+
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            margin-left: 8px;
+            border: 2px solid #e5e7eb;
+            border-top-color: #6366f1;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .price-info {
+            background: #f8fafc;
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 8px;
+            font-size: 14px;
+            color: #6b7280;
+        }
+
+        .example-scenarios {
+            background: #f9fafb;
+            padding: 16px;
+            border-radius: 8px;
+            margin-top: 16px;
+        }
+
+        .example-title {
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+        }
+
+        .example-item {
+            font-size: 14px;
+            color: #6b7280;
+            margin-bottom: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <a href="/" class="back-link">ホームに戻る</a>
+
+        <h1>🎯 アラート作成</h1>
+
+        <div id="alert-message" class="alert"></div>
+
+        <form id="alert-form">
+            <div class="form-group">
+                <label>📧 通知先メールアドレス</label>
+                <input type="email" id="email" name="email" placeholder="your@email.com" required>
+            </div>
+
+            <div class="form-group">
+                <label>💰 監視する仮想通貨</label>
+                <select id="symbol" name="symbol" required>
+                    <option value="">銘柄を選択してください</option>
+                    <option value="BTC">Bitcoin (BTC)</option>
+                    <option value="ETH">Ethereum (ETH)</option>
+                    <option value="ADA">Cardano (ADA)</option>
+                    <option value="DOT">Polkadot (DOT)</option>
+                    <option value="LINK">Chainlink (LINK)</option>
+                    <option value="SOL">Solana (SOL)</option>
+                    <option value="MATIC">Polygon (MATIC)</option>
+                    <option value="AVAX">Avalanche (AVAX)</option>
+                    <option value="UNI">Uniswap (UNI)</option>
+                    <option value="ATOM">Cosmos (ATOM)</option>
+                </select>
+                <div class="price-info" id="price-info" style="display: none;">
+                    現在価格を取得中...
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>🚨 アラートタイプ</label>
+                <div class="alert-type-group">
+                    <div class="alert-type-option selected" data-type="rise">
+                        <input type="radio" name="alert_type" value="rise" checked>
+                        <div class="alert-type-icon">📈</div>
+                        <div class="alert-type-title">上昇アラート</div>
+                        <div class="alert-type-desc">価格上昇時に通知</div>
+                    </div>
+                    <div class="alert-type-option" data-type="fall">
+                        <input type="radio" name="alert_type" value="fall">
+                        <div class="alert-type-icon">📉</div>
+                        <div class="alert-type-title">下落アラート</div>
+                        <div class="alert-type-desc">価格下落時に通知</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label id="threshold-label">📊 アラート発火条件（上昇率 %）</label>
+                <div class="threshold-group">
+                    <input type="number" id="threshold" name="threshold" class="threshold-input" placeholder="5"
+                        min="0.1" max="50" step="0.1" required>
+                    <span class="threshold-unit">%</span>
+                </div>
+                <div class="help-text" id="threshold-help">
+                    設定した%以上価格が上昇したらアラートが発火します
+                </div>
+            </div>
+
+            <div class="example-scenarios">
+                <div class="example-title">💡 使用例</div>
+                <div id="example-content">
+                    <div class="example-item">• +5%: 価格が5%上昇したら通知</div>
+                    <div class="example-item">• +10%: 価格が10%上昇したら通知</div>
+                    <div class="example-item">• +20%: 価格が20%上昇したら通知</div>
+                </div>
+            </div>
+
+            <button type="submit" class="btn" id="submit-btn">
+                🚀 アラートを作成
+            </button>
+
+            <div class="loading" id="loading">
+                アラートを作成中...
+            </div>
+        </form>
+    </div>
+
+    <script>
+        // DOM要素の取得
+        const alertForm = document.getElementById('alert-form');
+        const alertMessage = document.getElementById('alert-message');
+        const submitBtn = document.getElementById('submit-btn');
+        const loading = document.getElementById('loading');
+        const symbolSelect = document.getElementById('symbol');
+        const priceInfo = document.getElementById('price-info');
+        const thresholdInput = document.getElementById('threshold');
+        const thresholdLabel = document.getElementById('threshold-label');
+        const thresholdHelp = document.getElementById('threshold-help');
+        const exampleContent = document.getElementById('example-content');
+
+        // アラートタイプの切り替え
+        document.querySelectorAll('.alert-type-option').forEach(option => {
+            option.addEventListener('click', function () {
+                // 全てのオプションから選択状態を削除
+                document.querySelectorAll('.alert-type-option').forEach(opt => {
+                    opt.classList.remove('selected');
+                });
+
+                // クリックされたオプションを選択状態にする
+                this.classList.add('selected');
+
+                // ラジオボタンをチェック
+                const radio = this.querySelector('input[type="radio"]');
+                radio.checked = true;
+
+                // UI更新
+                updateAlertTypeUI(radio.value);
+            });
+        });
+
+        function updateAlertTypeUI(alertType) {
+            if (alertType === 'rise') {
+                thresholdLabel.textContent = '📊 アラート発火条件（上昇率 %）';
+                thresholdHelp.textContent = '設定した%以上価格が上昇したらアラートが発火します';
+                thresholdInput.placeholder = '5';
+                thresholdInput.min = '0.1';
+                thresholdInput.max = '50';
+                exampleContent.innerHTML = `
+                    <div class="example-item">• +5%: 価格が5%上昇したら通知</div>
+                    <div class="example-item">• +10%: 価格が10%上昇したら通知</div>
+                    <div class="example-item">• +20%: 価格が20%上昇したら通知</div>
+                `;
+            } else {
+                thresholdLabel.textContent = '📊 アラート発火条件（下落率 %）';
+                thresholdHelp.textContent = '設定した%以上価格が下落したらアラートが発火します';
+                thresholdInput.placeholder = '-5';
+                thresholdInput.min = '-50';
+                thresholdInput.max = '-0.1';
+                exampleContent.innerHTML = `
+                    <div class="example-item">• -5%: 価格が5%下落したら通知</div>
+                    <div class="example-item">• -10%: 価格が10%下落したら通知</div>
+                    <div class="example-item">• -20%: 価格が20%下落したら通知</div>
+                `;
+            }
+        }
+
+        // 価格情報の取得
+        symbolSelect.addEventListener('change', async function () {
+            const symbol = this.value;
+            if (!symbol) {
+                priceInfo.style.display = 'none';
+                return;
+            }
+
+            priceInfo.style.display = 'block';
+            priceInfo.textContent = '現在価格を取得中...';
+
+            try {
+                const response = await fetch('/api/symbols');
+                const data = await response.json();
+
+                if (data.success) {
+                    const symbolData = data.symbols.find(s => s.symbol === symbol);
+                    if (symbolData && symbolData.current_price) {
+                        priceInfo.innerHTML = `
+                            <strong>${symbolData.name} (${symbol})</strong><br>
+                            現在価格: $${symbolData.current_price.toLocaleString('en-US', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 6
+                        })}
+                        `;
+                    } else {
+                        priceInfo.textContent = '価格情報を取得できませんでした';
+                    }
+                } else {
+                    priceInfo.textContent = '価格情報を取得できませんでした';
+                }
+            } catch (error) {
+                priceInfo.textContent = '価格情報を取得できませんでした';
+            }
+        });
+
+        // アラート表示関数
+        function showAlert(message, type) {
+            alertMessage.textContent = message;
+            alertMessage.className = `alert ${type}`;
+            alertMessage.style.display = 'block';
+
+            setTimeout(() => {
+                alertMessage.style.display = 'none';
+            }, 5000);
+        }
+
+        // フォーム送信処理
+        alertForm.addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            // ボタンを無効化
+            submitBtn.disabled = true;
+            loading.style.display = 'block';
+
+            // フォームデータを取得
+            const formData = new FormData(this);
+            const alertType = formData.get('alert_type');
+            let threshold = parseFloat(formData.get('threshold'));
+
+            // 下落アラートの場合は負の値に変換
+            if (alertType === 'fall' && threshold > 0) {
+                threshold = -threshold;
+            }
+
+            const data = {
+                email: formData.get('email'),
+                symbol: formData.get('symbol'),
+                threshold: threshold,
+                alert_type: alertType
+            };
+
+            try {
+                const response = await fetch('/api/alerts', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    showAlert(result.message, 'success');
+                    alertForm.reset();
+                    priceInfo.style.display = 'none';
+
+                    // アラートタイプをリセット
+                    document.querySelectorAll('.alert-type-option').forEach(opt => {
+                        opt.classList.remove('selected');
+                    });
+                    document.querySelector('.alert-type-option[data-type="rise"]').classList.add('selected');
+                    updateAlertTypeUI('rise');
+                } else {
+                    showAlert(result.error || 'アラート作成に失敗しました', 'error');
+                }
+            } catch (error) {
+                showAlert('ネットワークエラーが発生しました', 'error');
+            } finally {
+                // ボタンを有効化
+                submitBtn.disabled = false;
+                loading.style.display = 'none';
+            }
+        });
+
+        // 閾値入力の検証
+        thresholdInput.addEventListener('input', function () {
+            const alertType = document.querySelector('input[name="alert_type"]:checked').value;
+            const value = parseFloat(this.value);
+
+            if (alertType === 'rise') {
+                if (value <= 0) {
+                    this.setCustomValidity('上昇率は0.1%以上を入力してください');
+                } else if (value > 50) {
+                    this.setCustomValidity('上昇率は50%以下を入力してください');
+                } else {
+                    this.setCustomValidity('');
+                }
+            } else {
+                if (value >= 0) {
+                    this.setCustomValidity('下落率は負の値を入力してください（例: -5）');
+                } else if (value < -50) {
+                    this.setCustomValidity('下落率は-50%以上を入力してください');
+                } else {
+                    this.setCustomValidity('');
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>

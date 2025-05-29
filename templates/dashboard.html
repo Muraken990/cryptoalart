@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ダッシュボード - CryptoAlert</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        .search-box input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .search-box button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .nav {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .nav a {
+            color: #007bff;
+            text-decoration: none;
+            margin: 0 15px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="/">ホーム</a>
+            <a href="/create">アラート作成</a>
+        </div>
+
+        <h1>📊 ダッシュボード</h1>
+
+        <!-- システム統計 -->
+        <div class="card">
+            <h2>📈 システム状況</h2>
+            <div class="stats">
+                <div class="stat-item">
+                    <div>システム状況</div>
+                    <div class="stat-number" id="system-status">Loading...</div>
+                </div>
+                <div class="stat-item">
+                    <div>アクティブアラート</div>
+                    <div class="stat-number" id="active-alerts">-</div>
+                </div>
+                <div class="stat-item">
+                    <div>登録ユーザー</div>
+                    <div class="stat-number" id="total-users">-</div>
+                </div>
+                <div class="stat-item">
+                    <div>発火済み</div>
+                    <div class="stat-number" id="triggered-alerts">-</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- アラート検索 -->
+        <div class="card">
+            <h2>🔍 あなたのアラートを確認</h2>
+            <div class="search-box">
+                <input type="email" id="search-email" placeholder="メールアドレスを入力してアラートを検索">
+                <button onclick="searchAlerts()">検索</button>
+            </div>
+        </div>
+
+        <!-- 検索結果 -->
+        <div id="alerts-container" style="display: none;">
+            <div class="card">
+                <h2>📋 アラート一覧</h2>
+                <div id="alerts-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // システム状況を取得
+        async function loadSystemStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+
+                if (data.success) {
+                    document.getElementById('system-status').textContent = data.status.monitor;
+                    document.getElementById('active-alerts').textContent = data.statistics.active_alerts;
+                    document.getElementById('total-users').textContent = data.statistics.active_users;
+                    document.getElementById('triggered-alerts').textContent = data.statistics.triggered_alerts;
+                }
+            } catch (error) {
+                console.error('Error loading system status:', error);
+            }
+        }
+
+        // アラート検索
+        async function searchAlerts() {
+            const email = document.getElementById('search-email').value.trim();
+            if (!email) {
+                alert('メールアドレスを入力してください');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/alerts/${encodeURIComponent(email)}`);
+                const data = await response.json();
+
+                const container = document.getElementById('alerts-container');
+                const list = document.getElementById('alerts-list');
+
+                if (data.success && data.alerts.length > 0) {
+                    list.innerHTML = '';
+                    data.alerts.forEach(alert => {
+                        const statusText = alert.status === 'active' ? '✅ 監視中' :
+                            alert.status === 'triggered' ? '🔥 発火済み' : '⏹️ 停止';
+
+                        list.innerHTML += `
+                        <div style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 5px;">
+                            <h3>${alert.symbol} (${alert.base_symbol}/USDT) - ${statusText}</h3>
+                            <p><strong>閾値:</strong> ${alert.threshold_percent > 0 ? '+' : ''}${alert.threshold_percent}%</p>
+                            <p><strong>基準価格:</strong> $${parseFloat(alert.base_price).toLocaleString()}</p>
+                            <p><strong>作成日時:</strong> ${new Date(alert.created_at).toLocaleString('ja-JP')}</p>
+                        </div>
+                    `;
+                    });
+                    container.style.display = 'block';
+                } else {
+                    list.innerHTML = '<p>指定されたメールアドレスのアラートは見つかりませんでした。</p>';
+                    container.style.display = 'block';
+                }
+            } catch (error) {
+                alert('検索中にエラーが発生しました');
+            }
+        }
+
+        // Enter キーで検索
+        document.getElementById('search-email').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                searchAlerts();
+            }
+        });
+
+        // ページ読み込み時にシステム状況を取得
+        document.addEventListener('DOMContentLoaded', loadSystemStatus);
+    </script>
+</body>
+
+</html>

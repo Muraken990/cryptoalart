@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryptoAlert - 仮想通貨価格アラートサービス</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+
+        .nav {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .nav a {
+            margin: 0 15px;
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+
+        .nav a:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🚨 CryptoAlert</h1>
+        <p style="text-align: center; font-size: 18px;">仮想通貨の価格変動を見逃さない！設定した価格に達したら即座にメール通知。</p>
+
+        <div class="nav">
+            <a href="/create">🎯 アラート作成</a>
+            <a href="/dashboard">📊 ダッシュボード</a>
+        </div>
+
+        <div style="text-align: center; margin-top: 30px;">
+            <h3>🔥 現在監視中のアラート数</h3>
+            <p id="active-alerts" style="font-size: 24px; color: #007bff;">読み込み中...</p>
+        </div>
+    </div>
+
+    <script>
+        // システム状況を取得
+        fetch('/api/status')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('active-alerts').textContent = data.statistics.active_alerts + '件';
+                }
+            })
+            .catch(error => {
+                document.getElementById('active-alerts').textContent = 'エラー';
+            });
+    </script>
+</body>
+
+</html>
