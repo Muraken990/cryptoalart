@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CryptoAlert Database Schema and Management - 下落率アラート対応版
+CryptoAlert Database Schema and Management - 認証機能対応版
 データベース設計とテーブル管理
 """
 
@@ -9,13 +9,40 @@ import hashlib
 import secrets
 import requests
 import time
+import bcrypt
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict
+from flask_login import UserMixin
 import json
 
 DATABASE_FILE = "crypto_alerts.db"
 BINANCE_API_URL = "https://api.binance.com/api/v3"
 
+class User(UserMixin):
+    def __init__(self, user_data):
+        self.id = str(user_data['id'])
+        self.email = user_data['email']
+        self._is_active = user_data.get('is_active', True)  # アンダースコア付きに変更
+        self.created_at = user_data.get('created_at')
+        self.last_login = user_data.get('last_login')
+    
+    @property
+    def is_active(self):
+        """ユーザーがアクティブかどうか"""
+        return bool(self._is_active)
+    
+    def get_id(self):
+        """Flask-Login必須メソッド"""
+        return self.id
+    
+    def is_authenticated(self):
+        """認証済みかどうか"""
+        return True
+    
+    def is_anonymous(self):
+        """匿名ユーザーかどうか"""
+        return False
+    
 class AlertDatabase:
     def __init__(self, db_file: str = DATABASE_FILE):
         self.db_file = db_file
@@ -26,20 +53,42 @@ class AlertDatabase:
         with sqlite3.connect(self.db_file) as conn:
             conn.execute("PRAGMA foreign_keys = ON")
             
-            # ユーザーテーブル
+            # ユーザーテーブル（認証機能追加）
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     email VARCHAR(255) UNIQUE NOT NULL,
                     email_hash VARCHAR(64) NOT NULL,
+                    password_hash VARCHAR(255),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_login TIMESTAMP,
                     is_active BOOLEAN DEFAULT 1,
+                    is_registered BOOLEAN DEFAULT 0,
                     daily_alert_count INTEGER DEFAULT 0,
                     plan VARCHAR(20) DEFAULT 'free',
                     unsubscribe_token VARCHAR(64) UNIQUE
                 )
             """)
+            
+            # 既存usersテーブルに新しいカラムを追加
+            try:
+                conn.execute("ALTER TABLE users ADD COLUMN password_hash VARCHAR(255)")
+                print("✅ password_hashカラムを追加しました")
+            except sqlite3.OperationalError:
+                pass
+            
+            try:
+                conn.execute("ALTER TABLE users ADD COLUMN is_registered BOOLEAN DEFAULT 0")
+                print("✅ is_registeredカラムを追加しました")
+            except sqlite3.OperationalError:
+                pass
+            
+            try:
+                conn.execute("ALTER TABLE users ADD COLUMN last_login TIMESTAMP")
+                print("✅ last_loginカラムを追加しました")
+            except sqlite3.OperationalError:
+                pass
             
             # アラートテーブル（下落率対応）
             conn.execute("""
@@ -68,7 +117,6 @@ class AlertDatabase:
                 conn.execute("ALTER TABLE alerts ADD COLUMN alert_type VARCHAR(10) DEFAULT 'rise'")
                 print("✅ alert_typeカラムを追加しました")
             except sqlite3.OperationalError:
-                # カラムが既に存在する場合
                 pass
             
             # アラート履歴テーブル（下落率対応）
@@ -118,6 +166,17 @@ class AlertDatabase:
                 )
             """)
             
+            # ログイン試行履歴テーブル（新規追加）
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS login_attempts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    email VARCHAR(255) NOT NULL,
+                    ip_address VARCHAR(45),
+                    success BOOLEAN DEFAULT 0,
+                    attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
             # インデックス作成
             conn.execute("CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_alerts_user_id ON alerts(user_id)")
@@ -125,12 +184,13 @@ class AlertDatabase:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_alerts_type ON alerts(alert_type)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_price_history_symbol ON price_history(symbol, recorded_at)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_login_attempts_email ON login_attempts(email, attempted_at)")
             
             # 初期システム設定
             self._insert_default_config(conn)
             
             conn.commit()
-            print("✅ データベース初期化完了（下落率アラート対応）")
+            print("✅ データベース初期化完了（認証機能対応）")
     
     def _insert_default_config(self, conn):
         """デフォルト設定を挿入"""
@@ -142,8 +202,10 @@ class AlertDatabase:
             ('max_threshold_percent', '50.0'),
             ('check_interval_seconds', '60'),
             ('email_cooldown_minutes', '5'),
-            ('min_fall_threshold', '-50.0'),  # 最大下落率
-            ('max_rise_threshold', '50.0')    # 最大上昇率
+            ('min_fall_threshold', '-50.0'),
+            ('max_rise_threshold', '50.0'),
+            ('max_login_attempts', '5'),
+            ('login_lockout_minutes', '30')
         ]
         
         for key, value in default_configs:
@@ -152,21 +214,143 @@ class AlertDatabase:
                 VALUES (?, ?)
             """, (key, value))
     
+    # ==================== 認証関連メソッド ====================
+    
+    def hash_password(self, password: str) -> str:
+        """パスワードをハッシュ化"""
+        return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    
+    def verify_password(self, password: str, password_hash: str) -> bool:
+        """パスワードを検証"""
+        return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
+    
+    def register_user(self, email: str, password: str) -> Dict:
+        """新規ユーザー登録"""
+        email = email.lower().strip()
+        
+        # パスワード要件チェック
+        if len(password) < 6:
+            raise ValueError("パスワードは6文字以上で設定してください")
+        
+        # メールアドレス重複チェック
+        if self.get_user_by_email(email):
+            raise ValueError("このメールアドレスは既に登録されています")
+        
+        email_hash = hashlib.sha256(email.encode()).hexdigest()
+        password_hash = self.hash_password(password)
+        unsubscribe_token = secrets.token_urlsafe(32)
+        
+        with sqlite3.connect(self.db_file) as conn:
+            cursor = conn.execute("""
+                INSERT INTO users (email, email_hash, password_hash, is_registered, unsubscribe_token)
+                VALUES (?, ?, ?, 1, ?)
+            """, (email, email_hash, password_hash, unsubscribe_token))
+            
+            user_id = cursor.lastrowid
+            conn.commit()
+            
+            print(f"✅ ユーザー登録完了: {email} (ID: {user_id})")
+            
+            return {
+                'user_id': user_id,
+                'email': email,
+                'created_at': datetime.now().isoformat()
+            }
+    
+    def authenticate_user(self, email: str, password: str, ip_address: str = None) -> Optional[User]:
+        """ユーザー認証"""
+        email = email.lower().strip()
+        
+        # ログイン試行回数チェック
+        if self._is_login_locked(email):
+            raise ValueError("ログイン試行回数が上限に達しました。30分後に再試行してください。")
+        
+        # ユーザー取得
+        user_data = self.get_user_by_email(email)
+        if not user_data or not user_data.get('password_hash'):
+            self._log_login_attempt(email, False, ip_address)
+            return None
+        
+        # パスワード検証
+        if self.verify_password(password, user_data['password_hash']):
+            # ログイン成功
+            self._log_login_attempt(email, True, ip_address)
+            self._update_last_login(user_data['id'])
+            return User(user_data)
+        else:
+            # ログイン失敗
+            self._log_login_attempt(email, False, ip_address)
+            return None
+    
+    def get_user_by_email(self, email: str) -> Optional[Dict]:
+        """メールアドレスでユーザーを取得"""
+        with sqlite3.connect(self.db_file) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("""
+                SELECT * FROM users WHERE email = ? AND is_active = 1
+            """, (email.lower().strip(),))
+            
+            result = cursor.fetchone()
+            return dict(result) if result else None
+    
+    def get_user_by_id(self, user_id: int) -> Optional[User]:
+        """IDでユーザーを取得（Flask-Login用）"""
+        with sqlite3.connect(self.db_file) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("""
+                SELECT * FROM users WHERE id = ? AND is_active = 1
+            """, (user_id,))
+            
+            result = cursor.fetchone()
+            return User(dict(result)) if result else None
+    
+    def _log_login_attempt(self, email: str, success: bool, ip_address: str = None):
+        """ログイン試行を記録"""
+        with sqlite3.connect(self.db_file) as conn:
+            conn.execute("""
+                INSERT INTO login_attempts (email, ip_address, success)
+                VALUES (?, ?, ?)
+            """, (email, ip_address, success))
+            conn.commit()
+    
+    def _is_login_locked(self, email: str) -> bool:
+        """ログインがロックされているかチェック"""
+        with sqlite3.connect(self.db_file) as conn:
+            cursor = conn.execute("""
+                SELECT COUNT(*) FROM login_attempts 
+                WHERE email = ? AND success = 0 
+                AND attempted_at > datetime('now', '-30 minutes')
+            """, (email,))
+            
+            failed_attempts = cursor.fetchone()[0]
+            return failed_attempts >= 5
+    
+    def _update_last_login(self, user_id: int):
+        """最終ログイン時刻を更新"""
+        with sqlite3.connect(self.db_file) as conn:
+            conn.execute("""
+                UPDATE users SET last_login = CURRENT_TIMESTAMP 
+                WHERE id = ?
+            """, (user_id,))
+            conn.commit()
+    
+    # ==================== 既存メソッド（認証対応版） ====================
+    
     def create_user(self, email: str) -> int:
-        """新しいユーザーを作成"""
+        """新しいユーザーを作成（非登録ユーザー用）"""
         email = email.lower().strip()
         email_hash = hashlib.sha256(email.encode()).hexdigest()
         unsubscribe_token = secrets.token_urlsafe(32)
         
         with sqlite3.connect(self.db_file) as conn:
             cursor = conn.execute("""
-                INSERT INTO users (email, email_hash, unsubscribe_token)
-                VALUES (?, ?, ?)
+                INSERT INTO users (email, email_hash, unsubscribe_token, is_registered)
+                VALUES (?, ?, ?, 0)
             """, (email, email_hash, unsubscribe_token))
             
             user_id = cursor.lastrowid
             conn.commit()
-            print(f"✅ ユーザー作成: {email} (ID: {user_id})")
+            print(f"✅ 非登録ユーザー作成: {email} (ID: {user_id})")
             return user_id
     
     def get_or_create_user(self, email: str) -> int:
@@ -434,6 +618,9 @@ class AlertDatabase:
             cursor = conn.execute("SELECT COUNT(*) FROM users WHERE is_active = 1")
             stats['active_users'] = cursor.fetchone()[0]
             
+            cursor = conn.execute("SELECT COUNT(*) FROM users WHERE is_registered = 1 AND is_active = 1")
+            stats['registered_users'] = cursor.fetchone()[0]
+            
             # アラート統計
             cursor = conn.execute("SELECT COUNT(*) FROM alerts WHERE status = 'active'")
             stats['active_alerts'] = cursor.fetchone()[0]
@@ -569,11 +756,36 @@ class AlertDatabase:
 
 def main():
     """データベース初期化とテスト"""
-    print("🗄️ CryptoAlert Database 初期化（上昇・下落アラート対応版）")
+    print("🗄️ CryptoAlert Database 初期化（認証機能対応版）")
     print("=" * 60)
     
     # データベース初期化
     db = AlertDatabase()
+    
+    # 認証機能テスト
+    print("\n🔐 認証機能テスト...")
+    
+    try:
+        # テストユーザー登録
+        test_user = db.register_user("test@example.com", "password123")
+        print(f"✅ テストユーザー登録成功: {test_user}")
+        
+        # 認証テスト
+        user = db.authenticate_user("test@example.com", "password123")
+        if user:
+            print(f"✅ 認証成功: {user.email} (ID: {user.id})")
+        else:
+            print("❌ 認証失敗")
+        
+        # 間違ったパスワードでテスト
+        user = db.authenticate_user("test@example.com", "wrongpassword")
+        if not user:
+            print("✅ 不正パスワード拒否: 正常")
+        
+    except ValueError as e:
+        print(f"⚠️ 認証テスト警告: {e}")
+    except Exception as e:
+        print(f"❌ 認証テストエラー: {e}")
     
     # Binance API接続テスト
     print("\n📡 Binance API接続テスト...")
@@ -586,54 +798,13 @@ def main():
         else:
             print(f"❌ {symbol}: 価格取得失敗")
     
-    # テストデータ作成
-    print("\n📝 テストアラート作成中...")
+    # システム統計
+    print("\n📈 システム統計:")
+    stats = db.get_statistics()
+    for key, value in stats.items():
+        print(f"  • {key}: {value}")
     
-    try:
-        # 上昇アラート
-        alert1 = db.create_alert("test@example.com", "BTC", 5.0, "rise")
-        time.sleep(1)
-        
-        # 下落アラート
-        alert2 = db.create_alert("test@example.com", "ETH", -3.0, "fall")
-        time.sleep(1)
-        
-        # 混合アラート
-        alert3 = db.create_alert("user2@example.com", "ADA", 10.0, "rise")
-        alert4 = db.create_alert("user2@example.com", "DOT", -5.0, "fall")
-        
-        print("\n📊 アクティブアラート一覧:")
-        active_alerts = db.get_active_alerts()
-        for alert in active_alerts:
-            current_price = float(alert['current_price'])
-            base_price = float(alert['base_price'])
-            change = ((current_price - base_price) / base_price) * 100
-            alert_type = alert.get('alert_type', 'rise')
-            direction = "上昇" if alert_type == 'rise' else "下落"
-            
-            print(f"  • {alert['symbol']}: {direction} {alert['threshold_percent']:+.2f}% 目標")
-            print(f"    現在: ${current_price:,.6f} ({change:+.2f}%) - {alert['email']}")
-        
-        print("\n🔍 アラート条件チェックテスト...")
-        for alert in active_alerts[:2]:
-            result = db.check_alert_condition(alert)
-            if result:
-                status = "🚨 発火!" if result['triggered'] else "⏳ 待機中"
-                alert_type = result.get('alert_type', 'rise')
-                direction = "上昇" if alert_type == 'rise' else "下落"
-                print(f"  • {result['symbol']} ({direction}): {result['price_change']:+.2f}% {status}")
-        
-        print("\n📈 システム統計:")
-        stats = db.get_statistics()
-        for key, value in stats.items():
-            print(f"  • {key}: {value}")
-        
-        print("\n✅ 上昇・下落アラート対応テスト完了")
-        
-    except Exception as e:
-        print(f"❌ エラー: {e}")
-        import traceback
-        traceback.print_exc()
+    print("\n✅ 認証機能対応データベース初期化完了")
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>新規登録</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .register-container {
+            max-width: 500px;
+            margin: 50px auto;
+            padding: 30px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .password-strength {
+            height: 5px;
+            margin-top: 5px;
+            background-color: #e9ecef;
+            border-radius: 3px;
+        }
+        .password-strength.weak { background-color: #dc3545; }
+        .password-strength.medium { background-color: #ffc107; }
+        .password-strength.strong { background-color: #28a745; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="register-container">
+            <h2 class="text-center mb-4">新規登録</h2>
+            
+            <!-- フラッシュメッセージ表示エリア -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div id="flash-messages">
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+            
+            <form method="POST" action="/auth/register" id="registerForm">
+                <div class="mb-3">
+                    <label for="username" class="form-label">ユーザー名</label>
+                    <input type="text" class="form-control" id="username" name="username" required minlength="3">
+                    <div class="form-text">3文字以上で入力してください</div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="email" class="form-label">メールアドレス</label>
+                    <input type="email" class="form-control" id="email" name="email" required>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="password" class="form-label">パスワード</label>
+                    <input type="password" class="form-control" id="password" name="password" required minlength="8">
+                    <div class="password-strength" id="passwordStrength"></div>
+                    <div class="form-text">8文字以上で入力してください</div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="confirmPassword" class="form-label">パスワード確認</label>
+                    <input type="password" class="form-control" id="confirmPassword" name="confirmPassword" required>
+                    <div class="invalid-feedback" id="passwordMismatch">
+                        パスワードが一致しません
+                    </div>
+                </div>
+                
+                <div class="mb-3 form-check">
+                    <input type="checkbox" class="form-check-input" id="agreeTerms" name="agreeTerms" required>
+                    <label class="form-check-label" for="agreeTerms">
+                        <a href="#" data-bs-toggle="modal" data-bs-target="#termsModal">利用規約</a>に同意します
+                    </label>
+                </div>
+                
+                <button type="submit" class="btn btn-success w-100 mb-3">アカウント作成</button>
+            </form>
+            
+            <div class="text-center">
+                <p class="mb-0">既にアカウントをお持ちの方は <a href="/auth/login">ログイン</a></p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 利用規約モーダル -->
+    <div class="modal fade" id="termsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">利用規約</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <h6>第1条（目的）</h6>
+                    <p>本規約は、当サービスの利用に関する条件を定めるものです。</p>
+                    
+                    <h6>第2条（利用登録）</h6>
+                    <p>利用登録は、利用希望者が本規約に同意の上、所定の方法によって申込みを行い、当社がこれを承認することによって完了するものとします。</p>
+                    
+                    <h6>第3条（禁止事項）</h6>
+                    <p>ユーザーは、本サービスの利用にあたり、以下の行為をしてはなりません：</p>
+                    <ul>
+                        <li>法令または公序良俗に違反する行為</li>
+                        <li>犯罪行為に関連する行為</li>
+                        <li>他のユーザーまたは第三者の権利を侵害する行為</li>
+                    </ul>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // パスワード強度チェック
+        document.getElementById('password').addEventListener('input', function() {
+            const password = this.value;
+            const strengthBar = document.getElementById('passwordStrength');
+            
+            let strength = 0;
+            if (password.length >= 8) strength++;
+            if (/[A-Z]/.test(password)) strength++;
+            if (/[0-9]/.test(password)) strength++;
+            if (/[^A-Za-z0-9]/.test(password)) strength++;
+            
+            strengthBar.className = 'password-strength';
+            if (strength <= 1) strengthBar.classList.add('weak');
+            else if (strength <= 2) strengthBar.classList.add('medium');
+            else strengthBar.classList.add('strong');
+        });
+        
+        // パスワード確認チェック
+        document.getElementById('confirmPassword').addEventListener('input', function() {
+            const password = document.getElementById('password').value;
+            const confirmPassword = this.value;
+            const mismatchDiv = document.getElementById('passwordMismatch');
+            
+            if (password !== confirmPassword && confirmPassword.length > 0) {
+                this.classList.add('is-invalid');
+                mismatchDiv.style.display = 'block';
+            } else {
+                this.classList.remove('is-invalid');
+                mismatchDiv.style.display = 'none';
+            }
+        });
+        
+        // フォーム送信時の最終チェック
+        document.getElementById('registerForm').addEventListener('submit', function(e) {
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            
+            if (password !== confirmPassword) {
+                e.preventDefault();
+                alert('パスワードが一致しません');
+            }
+        });
+    </script>
+</body>
+</html>

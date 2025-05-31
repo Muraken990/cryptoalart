@@ -1,207 +1,357 @@
 <!DOCTYPE html>
 <html lang="ja">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ダッシュボード - CryptoAlert</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         body {
-            font-family: Arial, sans-serif;
-            margin: 40px;
-            background: #f5f5f5;
+            background-color: #f8f9fa;
         }
-
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-        }
-
-        .card {
-            background: white;
-            padding: 20px;
-            margin: 20px 0;
-            border-radius: 10px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-
-        h1 {
-            color: #333;
-            text-align: center;
-        }
-
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-        }
-
-        .stat-item {
-            text-align: center;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 8px;
-        }
-
-        .stat-number {
-            font-size: 24px;
-            font-weight: bold;
-            color: #007bff;
-        }
-
-        .search-box {
-            display: flex;
-            gap: 10px;
-            margin: 20px 0;
-        }
-
-        .search-box input {
-            flex: 1;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-        }
-
-        .search-box button {
-            padding: 10px 20px;
-            background: #007bff;
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 15px;
             color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-
-        .nav {
-            text-align: center;
+            padding: 25px;
             margin-bottom: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
         }
-
-        .nav a {
-            color: #007bff;
-            text-decoration: none;
-            margin: 0 15px;
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        .stat-card.success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+        .stat-card.warning {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        .stat-card.info {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        .stat-card.primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .stat-card.danger {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+        }
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        .stat-icon {
+            font-size: 2.5rem;
+            opacity: 0.3;
+            position: absolute;
+            right: 20px;
+            top: 20px;
+        }
+        .alert-table {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .table-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+        }
+        .badge-rise {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+        .badge-fall {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+        .navbar-brand {
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+        .welcome-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+        }
+        .quick-actions {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
         }
     </style>
 </head>
-
 <body>
-    <div class="container">
-        <div class="nav">
-            <a href="/">ホーム</a>
-            <a href="/create">アラート作成</a>
+    <!-- ナビゲーションバー -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/dashboard">
+                <i class="fas fa-chart-line me-2"></i>CryptoAlert
+            </a>
+            <div class="navbar-nav ms-auto">
+                <span class="navbar-text me-3">
+                    <i class="fas fa-user me-1"></i>{{ user.email }}
+                </span>
+                <a class="nav-link" href="/auth/logout">
+                    <i class="fas fa-sign-out-alt me-1"></i>ログアウト
+                </a>
+            </div>
         </div>
+    </nav>
 
-        <h1>📊 ダッシュボード</h1>
+    <div class="container mt-4">
+        <!-- フラッシュメッセージ -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
 
-        <!-- システム統計 -->
-        <div class="card">
-            <h2>📈 システム状況</h2>
-            <div class="stats">
-                <div class="stat-item">
-                    <div>システム状況</div>
-                    <div class="stat-number" id="system-status">Loading...</div>
+        <!-- ウェルカムセクション -->
+        <div class="welcome-section">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1 class="mb-2">
+                        <i class="fas fa-tachometer-alt me-2"></i>個人ダッシュボード
+                    </h1>
+                    <p class="mb-0 fs-5">暗号通貨アラートシステムへようこそ！</p>
+                    <small class="opacity-75">{{ user.email }} としてログイン中</small>
                 </div>
-                <div class="stat-item">
-                    <div>アクティブアラート</div>
-                    <div class="stat-number" id="active-alerts">-</div>
-                </div>
-                <div class="stat-item">
-                    <div>登録ユーザー</div>
-                    <div class="stat-number" id="total-users">-</div>
-                </div>
-                <div class="stat-item">
-                    <div>発火済み</div>
-                    <div class="stat-number" id="triggered-alerts">-</div>
+                <div class="col-md-4 text-end">
+                    <i class="fas fa-rocket fa-3x opacity-50"></i>
                 </div>
             </div>
         </div>
 
-        <!-- アラート検索 -->
-        <div class="card">
-            <h2>🔍 あなたのアラートを確認</h2>
-            <div class="search-box">
-                <input type="email" id="search-email" placeholder="メールアドレスを入力してアラートを検索">
-                <button onclick="searchAlerts()">検索</button>
+        <!-- 統計情報カード -->
+        <div class="row">
+            <div class="col-md-3 col-sm-6">
+                <div class="stat-card primary position-relative">
+                    <i class="fas fa-bell stat-icon"></i>
+                    <div class="stat-number">{{ stats.total_alerts }}</div>
+                    <div class="stat-label">総アラート数</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="stat-card success position-relative">
+                    <i class="fas fa-check-circle stat-icon"></i>
+                    <div class="stat-number">{{ stats.active_alerts }}</div>
+                    <div class="stat-label">アクティブ</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="stat-card warning position-relative">
+                    <i class="fas fa-fire stat-icon"></i>
+                    <div class="stat-number">{{ stats.triggered_alerts }}</div>
+                    <div class="stat-label">発火済み</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="stat-card info position-relative">
+                    <i class="fas fa-calendar-day stat-icon"></i>
+                    <div class="stat-number">{{ stats.today_triggered }}</div>
+                    <div class="stat-label">今日の発火</div>
+                </div>
             </div>
         </div>
 
-        <!-- 検索結果 -->
-        <div id="alerts-container" style="display: none;">
-            <div class="card">
-                <h2>📋 アラート一覧</h2>
-                <div id="alerts-list"></div>
+        <!-- アラートタイプ別統計 -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="stat-card success position-relative">
+                    <i class="fas fa-arrow-trend-up stat-icon"></i>
+                    <div class="stat-number">{{ stats.rise_alerts }}</div>
+                    <div class="stat-label">上昇アラート（監視中）</div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="stat-card danger position-relative">
+                    <i class="fas fa-arrow-trend-down stat-icon"></i>
+                    <div class="stat-number">{{ stats.fall_alerts }}</div>
+                    <div class="stat-label">下落アラート（監視中）</div>
+                </div>
             </div>
         </div>
+
+        <!-- クイックアクション -->
+        <div class="quick-actions">
+            <h4 class="mb-3">
+                <i class="fas fa-bolt me-2"></i>クイックアクション
+            </h4>
+            <div class="row">
+                <div class="col-md-4">
+                    <a href="/create" class="btn btn-primary btn-lg w-100 mb-2">
+                        <i class="fas fa-plus me-2"></i>新しいアラート作成
+                    </a>
+                </div>
+                <div class="col-md-4">
+                    <button class="btn btn-outline-info btn-lg w-100 mb-2" onclick="refreshDashboard()">
+                        <i class="fas fa-refresh me-2"></i>データ更新
+                    </button>
+                </div>
+                <div class="col-md-4">
+                    <a href="/api/status" class="btn btn-outline-secondary btn-lg w-100 mb-2" target="_blank">
+                        <i class="fas fa-chart-bar me-2"></i>システム状態
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- アラート一覧テーブル -->
+        {% if alerts %}
+        <div class="alert-table">
+            <div class="table-header">
+                <h4 class="mb-0">
+                    <i class="fas fa-list me-2"></i>あなたのアラート一覧 ({{ alerts|length }}件)
+                </h4>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>通貨ペア</th>
+                            <th>種別</th>
+                            <th>閾値</th>
+                            <th>基準価格</th>
+                            <th>現在価格</th>
+                            <th>変動率</th>
+                            <th>状態</th>
+                            <th>作成日時</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for alert in alerts %}
+                        <tr>
+                            <td>
+                                <strong>{{ alert.base_symbol }}/USDT</strong>
+                            </td>
+                            <td>
+                                {% if alert.alert_type == 'rise' %}
+                                    <span class="badge badge-rise">
+                                        <i class="fas fa-arrow-up me-1"></i>上昇
+                                    </span>
+                                {% else %}
+                                    <span class="badge badge-fall">
+                                        <i class="fas fa-arrow-down me-1"></i>下落
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>{{ "%.2f"|format(alert.threshold_percent) }}%</td>
+                            <td>${{ "%.6f"|format(alert.base_price) }}</td>
+                            <td>
+                                {% if alert.current_price %}
+                                    ${{ "%.6f"|format(alert.current_price) }}
+                                {% else %}
+                                    <span class="text-muted">未取得</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if alert.current_price and alert.base_price %}
+                                    {% set change = ((alert.current_price - alert.base_price) / alert.base_price * 100) %}
+                                    <span class="{% if change > 0 %}text-success{% elif change < 0 %}text-danger{% else %}text-muted{% endif %}">
+                                        {{ "%.2f"|format(change) }}%
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if alert.status == 'active' %}
+                                    <span class="badge bg-success">アクティブ</span>
+                                {% elif alert.status == 'triggered' %}
+                                    <span class="badge bg-warning">発火済み</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">停止</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {{ alert.created_at[:10] if alert.created_at else 'N/A' }}
+                            </td>
+                            <td>
+                                {% if alert.status == 'active' %}
+                                    <button class="btn btn-sm btn-outline-danger" 
+                                            onclick="deleteAlert('{{ alert.alert_token }}')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div class="alert-table">
+            <div class="table-header">
+                <h4 class="mb-0">
+                    <i class="fas fa-list me-2"></i>アラート一覧
+                </h4>
+            </div>
+            <div class="p-4 text-center">
+                <i class="fas fa-bell-slash fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">まだアラートがありません</h5>
+                <p class="text-muted">最初のアラートを作成して、暗号通貨の価格変動を監視しましょう！</p>
+                <a href="/create" class="btn btn-primary">
+                    <i class="fas fa-plus me-2"></i>アラートを作成
+                </a>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // システム状況を取得
-        async function loadSystemStatus() {
-            try {
-                const response = await fetch('/api/status');
-                const data = await response.json();
+        function refreshDashboard() {
+            location.reload();
+        }
 
-                if (data.success) {
-                    document.getElementById('system-status').textContent = data.status.monitor;
-                    document.getElementById('active-alerts').textContent = data.statistics.active_alerts;
-                    document.getElementById('total-users').textContent = data.statistics.active_users;
-                    document.getElementById('triggered-alerts').textContent = data.statistics.triggered_alerts;
-                }
-            } catch (error) {
-                console.error('Error loading system status:', error);
+        function deleteAlert(alertToken) {
+            if (confirm('このアラートを削除してもよろしいですか？')) {
+                fetch(`/api/alerts/${alertToken}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('削除に失敗しました: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('削除中にエラーが発生しました');
+                });
             }
         }
 
-        // アラート検索
-        async function searchAlerts() {
-            const email = document.getElementById('search-email').value.trim();
-            if (!email) {
-                alert('メールアドレスを入力してください');
-                return;
-            }
-
-            try {
-                const response = await fetch(`/api/alerts/${encodeURIComponent(email)}`);
-                const data = await response.json();
-
-                const container = document.getElementById('alerts-container');
-                const list = document.getElementById('alerts-list');
-
-                if (data.success && data.alerts.length > 0) {
-                    list.innerHTML = '';
-                    data.alerts.forEach(alert => {
-                        const statusText = alert.status === 'active' ? '✅ 監視中' :
-                            alert.status === 'triggered' ? '🔥 発火済み' : '⏹️ 停止';
-
-                        list.innerHTML += `
-                        <div style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 5px;">
-                            <h3>${alert.symbol} (${alert.base_symbol}/USDT) - ${statusText}</h3>
-                            <p><strong>閾値:</strong> ${alert.threshold_percent > 0 ? '+' : ''}${alert.threshold_percent}%</p>
-                            <p><strong>基準価格:</strong> $${parseFloat(alert.base_price).toLocaleString()}</p>
-                            <p><strong>作成日時:</strong> ${new Date(alert.created_at).toLocaleString('ja-JP')}</p>
-                        </div>
-                    `;
-                    });
-                    container.style.display = 'block';
-                } else {
-                    list.innerHTML = '<p>指定されたメールアドレスのアラートは見つかりませんでした。</p>';
-                    container.style.display = 'block';
-                }
-            } catch (error) {
-                alert('検索中にエラーが発生しました');
-            }
-        }
-
-        // Enter キーで検索
-        document.getElementById('search-email').addEventListener('keypress', function (e) {
-            if (e.key === 'Enter') {
-                searchAlerts();
-            }
-        });
-
-        // ページ読み込み時にシステム状況を取得
-        document.addEventListener('DOMContentLoaded', loadSystemStatus);
+        // 自動更新（5分ごと）
+        setInterval(function() {
+            const currentPrices = document.querySelectorAll('td:nth-child(5)');
+            // APIから現在価格を取得して更新
+            // 実装は必要に応じて追加
+        }, 300000); // 5分
     </script>
 </body>
-
 </html>
