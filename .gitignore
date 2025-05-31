@@ -1,0 +1,20 @@
+# データベースファイル
+*.db
+crypto_alerts.db
+
+# 環境変数
+.env
+*.env
+SERVICE_GMAIL_PASS
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# ログファイル
+*.log
+logs/
+
+# システムファイル
+.DS_Store
